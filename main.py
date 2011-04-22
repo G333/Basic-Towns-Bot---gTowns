@@ -1,10 +1,10 @@
 """
-Copyright 2011 by G3 at Metaplode.com
-All rights reserved.
+By G3 at Metaplode.com
+(04/2011)
 
 For Python 2.7
 """
-import re
+import time
 
 import ego
 
@@ -25,16 +25,26 @@ class gBotUser():
         self.postcode = TOWNPOSTCODE
         
         self.w = ego.ghttp.GHttp()
-
+        self.s = ego.gserializer.gSerializer()
+        
+    def get_time(self):
+        return str(int(time.time()*1000))
+    
     def get_ip(self):
         """
         we get the ip for the town we want to join then use it to connect with tcp
         """
-        resp = self.w.rq(GSIGATEWAY, ref=TOWNSSWF, data='v=sushi&m=301%01' + self.postcode)
-        ip = self.w.search(resp, '%01208.85.(.*?)%01')
-        return '208.85.' + ip
+        resp = self.w.rq(GSIGATEWAY, ref=TOWNSSWF,
+                         data='X='+self.get_time()+'&v=sushi&m=301%01' + self.postcode)
+        ip = self.s.deserialize(self.w.unquote(resp))[0][-1][-4]
+        return ip
         #208.85.93.172
 
+    def get_sid(self):
+        for cookie in self.w.cj:
+            if cookie.name == 'gaia55_sid':
+                return cookie.value
+        
         
     def login(self):
         resp = self.w.rq('http://www.gaiaonline.com/auth/login', ref='http://www.gaiaonline.com/')
@@ -52,20 +62,15 @@ class gBotUser():
         #print resp
         if ' title="Logout from your Gaia account">Logout</a>' in resp:
             #GET SID
-            resp = self.w.rq(GSIGATEWAY, ref=TOWNSSWF,
-                        data=('X=1297114636174&v=sushi&m=50%04109%0410%01avatar%5Fcdn%04115%04'))
-            self.sid = self.w.unquote(self.w.search(resp, '%04109%01%05%01(.*?)%04'))
-
+            self.sid = self.get_sid()
             
             resp = self.w.rq(GSIGATEWAY, ref=TOWNSSWF,
-                        data=('X=1297114636174&v=sushi&m=112%01towns%04107%01' + self.sid + '%04'))
-
-            rg = re.compile('107%01%05%01(.*?)%01(.*?)%01(.*?)%01(.*?)%01h(.*?)%01')
-            m = rg.search(resp)
+                             data='X='+self.get_time()+'&v=sushi&m=107%01'+self.sid+'%04')
+            resp = self.s.deserialize(self.w.unquote(resp))
             
-            self.userid = m.group(1)
-            self.shortavi = self.w.unquote(m.group(3))
-            self.longavi = self.w.unquote('h' + m.group(5))
+            self.userid = resp[0][0][2]
+            self.shortavi = resp[0][0][4]
+            self.longavi = resp[0][0][-2]
             
             return True
 
@@ -79,7 +84,7 @@ def main():
     
     #create instance of the user
     user = gBotUser('username', 'password')
-    
+
     #get ip of the town
     ip = user.get_ip()
     print '->', ip
